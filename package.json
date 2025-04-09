@@ -1,15 +1,15 @@
 {
-  "name": "whatsapp-emoji-bot",
+  "name": "whatsapp-llm-bot",
   "version": "1.0.0",
-  "description": "WhatsApp bot that replies with appropriate emojis",
+  "description": "WhatsApp bot that uses a local LLM to respond to messages",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "openai": "^4.29.0",
+    "axios": "^1.8.4",
+    "dotenv": "^16.4.7",
     "qrcode-terminal": "^0.12.0",
-    "stability-client": "^1.9.0",
     "whatsapp-web.js": "^1.23.0"
   }
 }

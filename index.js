@@ -1,47 +1,44 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const axios = require('axios');
+const dotenv = require('dotenv');
 
-// Function to determine appropriate emoji based on message content
-function getEmojiForMessage(message) {
-  const lowerMsg = message.toLowerCase().trim();
-  
-  // Greetings
-  if (/\b(hi|hello|hey|hola|greetings)\b/.test(lowerMsg)) {
-    return '👋';
+// Load environment variables
+dotenv.config();
+
+// LLM configuration (with defaults)
+const LLM_CONFIG = {
+  model: process.env.LLM_MODEL || 'llama3.2:3b',
+  ollama_url: process.env.OLLAMA_URL || 'http://localhost:11434',
+  system_prompt: process.env.SYSTEM_PROMPT || 'You are a humorous assistant responding to WhatsApp messages. Always respond with a joke that\'s contextually relevant to the user\'s message. Try to identify the language the user is writing in and respond in the same language. Keep responses concise and entertaining.'
+};
+
+// Function to get response from local LLM using Ollama
+async function getResponseFromLLM(message) {
+  try {
+    const response = await axios.post(`${LLM_CONFIG.ollama_url}/api/chat`, {
+      model: LLM_CONFIG.model,
+      messages: [
+        {
+          role: 'system',
+          content: LLM_CONFIG.system_prompt
+        },
+        {
+          role: 'user',
+          content: message
+        }
+      ],
+      stream: false
+    });
+    
+    return response.data.message.content;
+  } catch (error) {
+    console.error('Error calling Ollama API:', error.message);
+    if (error.response) {
+      console.error('API Error:', error.response.data);
+    }
+    throw new Error('Failed to get response from LLM');
   }
-  
-  // Questions
-  if (/\?$/.test(lowerMsg) || /\b(what|who|when|where|why|how)\b/.test(lowerMsg)) {
-    return '🤔';
-  }
-  
-  // Thanks/Gratitude
-  if (/\b(thanks|thank you|thx|ty|gracias|appreciate)\b/.test(lowerMsg)) {
-    return '🙏';
-  }
-  
-  // Positive emotions
-  if (/\b(happy|glad|excited|yay|good|great|awesome|amazing|love|like)\b/.test(lowerMsg)) {
-    return '😊';
-  }
-  
-  // Negative emotions
-  if (/\b(sad|upset|angry|mad|bad|terrible|hate|dislike|sucks)\b/.test(lowerMsg)) {
-    return '😔';
-  }
-  
-  // Food related
-  if (/\b(food|eat|dinner|lunch|breakfast|hungry)\b/.test(lowerMsg)) {
-    return '🍔';
-  }
-  
-  // Work related
-  if (/\b(work|job|office|meeting|project|deadline)\b/.test(lowerMsg)) {
-    return '💼';
-  }
-  
-  // Default response for messages we don't categorize
-  return '👍';
 }
 
 // Initialize WhatsApp client
@@ -57,6 +54,7 @@ client.on('qr', (qr) => {
 
 client.on('ready', () => {
   console.log('WhatsApp client is ready!');
+  console.log(`Using LLM model: ${LLM_CONFIG.model}`);
 });
 
 client.on('message', async (message) => {
@@ -66,20 +64,24 @@ client.on('message', async (message) => {
 
     // Check if the message has a body (text content)
     if (!message.body || message.hasMedia) {
-      await message.reply('📷');
-      console.log('Received a media message, responded with 📷');
+      await message.reply('I can only respond to text messages for now.');
+      console.log('Received a media message, informed user about text-only capability');
       return;
     }
 
     console.log(`Received message: ${message.body}`);
     
-    // Get appropriate emoji based on message content
-    const emoji = getEmojiForMessage(message.body);
+    // Tell user we're processing their message
+    const chat = await message.getChat();
+    chat.sendStateTyping();
     
-    // Send emoji response
-    await message.reply(emoji);
+    // Get response from LLM
+    const response = await getResponseFromLLM(message.body);
     
-    console.log(`Sent emoji response for: ${message.body}`);
+    // Send LLM response
+    await message.reply(response);
+    
+    console.log(`Sent LLM response for: ${message.body}`);
   } catch (error) {
     console.error('Error processing message:', error);
     message.reply('Sorry, I encountered an error. Please try again later.');
