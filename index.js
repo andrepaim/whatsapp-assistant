@@ -64,6 +64,13 @@ client.on('message', async (message) => {
     // Only respond to messages that aren't from the bot itself
     if (message.fromMe) return;
 
+    // Check if the message has a body (text content)
+    if (!message.body || message.hasMedia) {
+      await message.reply('📷');
+      console.log('Received a media message, responded with 📷');
+      return;
+    }
+
     console.log(`Received message: ${message.body}`);
     
     // Get appropriate emoji based on message content
