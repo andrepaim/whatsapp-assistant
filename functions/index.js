@@ -57,6 +57,19 @@ class FirebaseStorageAdapter {
     }
     return sessions;
   }
+  
+  // Required for RemoteAuth
+  async sessionExists(options) {
+    const { session } = options;
+    try {
+      const file = this.bucket.file(session);
+      const [exists] = await file.exists();
+      return exists;
+    } catch (error) {
+      console.error('Error checking if session exists:', error);
+      return false;
+    }
+  }
 }
 
 const firebaseStorage = new FirebaseStorageAdapter(bucket);

@@ -50,7 +50,8 @@ jobs:
         // Initialize Firebase with emulator settings
         process.env.FIREBASE_STORAGE_EMULATOR_HOST = "localhost:9199";
         admin.initializeApp({
-          projectId: 'demo-whatsapp-joke-bot'
+          projectId: 'demo-whatsapp-joke-bot',
+          storageBucket: 'demo-whatsapp-joke-bot.appspot.com'
         });
 
         const bucket = admin.storage().bucket();
@@ -127,6 +128,19 @@ jobs:
               sessions.push({ key, data: JSON.parse(data.toString()) });
             }
             return sessions;
+          }
+          
+          // Required for RemoteAuth
+          async sessionExists(options) {
+            const { session } = options;
+            try {
+              const file = this.bucket.file(session);
+              const [exists] = await file.exists();
+              return exists;
+            } catch (error) {
+              console.error('Error checking if session exists:', error);
+              return false;
+            }
           }
         }
         
