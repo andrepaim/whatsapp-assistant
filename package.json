@@ -1,7 +1,7 @@
 {
-  "name": "whatsapp-llm-bot",
+  "name": "whatsapp-joke-bot",
   "version": "1.0.0",
-  "description": "WhatsApp bot that uses a local LLM to respond to messages",
+  "description": "WhatsApp bot that responds to messages with contextual jokes using a local LLM",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
