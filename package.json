@@ -1,7 +1,7 @@
 {
   "name": "whatsapp-joke-bot",
   "version": "1.0.0",
-  "description": "WhatsApp bot that responds to messages with contextual jokes using a local LLM",
+  "description": "WhatsApp bot that responds to messages with contextual jokes using LiteLLM for multi-provider LLM integration",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -10,6 +10,7 @@
   "dependencies": {
     "axios": "^1.8.4",
     "dotenv": "^16.4.7",
+    "litellm": "^0.12.0",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.23.0"
   },

@@ -1,23 +1,30 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const axios = require('axios');
 const dotenv = require('dotenv');
+const { litellm } = require('litellm');
 
 // Load environment variables
 dotenv.config();
 
 // LLM configuration (with defaults)
 const LLM_CONFIG = {
+  provider: process.env.LLM_PROVIDER || 'ollama',
   model: process.env.LLM_MODEL || 'llama3.2:3b',
-  ollama_url: process.env.OLLAMA_URL || 'http://localhost:11434',
+  api_base: process.env.LLM_API_BASE || 'http://localhost:11434',
+  api_key: process.env.LLM_API_KEY || '',
   system_prompt: process.env.SYSTEM_PROMPT || 'You are a humorous assistant responding to WhatsApp messages. Always respond with a joke that\'s contextually relevant to the user\'s message. Try to identify the language the user is writing in and respond in the same language. Keep responses concise and entertaining.'
 };
 
-// Function to get response from local LLM using Ollama
+// Function to get response from LLM using LiteLLM
 async function getResponseFromLLM(message) {
   try {
-    const response = await axios.post(`${LLM_CONFIG.ollama_url}/api/chat`, {
-      model: LLM_CONFIG.model,
+    // Set up LiteLLM config based on provider
+    const modelString = LLM_CONFIG.provider === 'ollama' 
+      ? `ollama/${LLM_CONFIG.model}` 
+      : LLM_CONFIG.model;
+    
+    const options = {
+      model: modelString,
       messages: [
         {
           role: 'system',
@@ -28,12 +35,19 @@ async function getResponseFromLLM(message) {
           content: message
         }
       ],
-      stream: false
-    });
+      api_base: LLM_CONFIG.api_base
+    };
     
-    return response.data.message.content;
+    // Add API key if provided
+    if (LLM_CONFIG.api_key) {
+      options.api_key = LLM_CONFIG.api_key;
+    }
+    
+    const response = await litellm.completion(options);
+    
+    return response.choices[0].message.content;
   } catch (error) {
-    console.error('Error calling Ollama API:', error.message);
+    console.error(`Error calling ${LLM_CONFIG.provider} API:`, error.message);
     if (error.response) {
       console.error('API Error:', error.response.data);
     }
@@ -54,7 +68,7 @@ client.on('qr', (qr) => {
 
 client.on('ready', () => {
   console.log('WhatsApp client is ready!');
-  console.log(`Using LLM model: ${LLM_CONFIG.model}`);
+  console.log(`Using LLM provider: ${LLM_CONFIG.provider}, model: ${LLM_CONFIG.model}`);
 });
 
 client.on('message', async (message) => {
@@ -98,3 +112,8 @@ client.on('message', async (message) => {
 
 // Start the client
 client.initialize();
+
+// Export for testing
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { getResponseFromLLM };
+}
