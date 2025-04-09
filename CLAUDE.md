@@ -5,7 +5,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 - Build/Start: `npm start`
 - Install dependencies: `npm install`
-- Environment setup: `export STABILITY_API_KEY=your_api_key_here`
 
 ## Code Style Guidelines
 - **Formatting**: Use 2-space indentation, single quotes for strings
@@ -16,4 +15,3 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **File Structure**: Keep related functionality in same file (small codebase)
 - **Async/Await**: Prefer async/await over Promise chains
 - **API Keys**: Never hardcode API keys, use environment variables
-- **Image Storage**: Save generated images to the 'images' directory

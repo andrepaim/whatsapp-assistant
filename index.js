@@ -1,13 +1,47 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { generateAsync } = require('stability-client');
-const fs = require('fs');
-const path = require('path');
 
-// Create images directory if it doesn't exist
-const imagesDir = path.join(__dirname, 'images');
-if (!fs.existsSync(imagesDir)) {
-  fs.mkdirSync(imagesDir);
+// Function to determine appropriate emoji based on message content
+function getEmojiForMessage(message) {
+  const lowerMsg = message.toLowerCase().trim();
+  
+  // Greetings
+  if (/\b(hi|hello|hey|hola|greetings)\b/.test(lowerMsg)) {
+    return '👋';
+  }
+  
+  // Questions
+  if (/\?$/.test(lowerMsg) || /\b(what|who|when|where|why|how)\b/.test(lowerMsg)) {
+    return '🤔';
+  }
+  
+  // Thanks/Gratitude
+  if (/\b(thanks|thank you|thx|ty|gracias|appreciate)\b/.test(lowerMsg)) {
+    return '🙏';
+  }
+  
+  // Positive emotions
+  if (/\b(happy|glad|excited|yay|good|great|awesome|amazing|love|like)\b/.test(lowerMsg)) {
+    return '😊';
+  }
+  
+  // Negative emotions
+  if (/\b(sad|upset|angry|mad|bad|terrible|hate|dislike|sucks)\b/.test(lowerMsg)) {
+    return '😔';
+  }
+  
+  // Food related
+  if (/\b(food|eat|dinner|lunch|breakfast|hungry)\b/.test(lowerMsg)) {
+    return '🍔';
+  }
+  
+  // Work related
+  if (/\b(work|job|office|meeting|project|deadline)\b/.test(lowerMsg)) {
+    return '💼';
+  }
+  
+  // Default response for messages we don't categorize
+  return '👍';
 }
 
 // Initialize WhatsApp client
@@ -32,33 +66,16 @@ client.on('message', async (message) => {
 
     console.log(`Received message: ${message.body}`);
     
-    // Generate the image using Stability AI
-    const result = await generateAsync({
-      prompt: message.body,
-      apiKey: process.env.STABILITY_API_KEY,
-      height: 1024,
-      width: 1024,
-      samples: 1,
-      engineId: 'stable-diffusion-xl-1024-v1-0'
-    });
-
-    // The result contains the image data as a base64 encoded string
-    const buffer = Buffer.from(result.artifacts[0].base64, 'base64');
+    // Get appropriate emoji based on message content
+    const emoji = getEmojiForMessage(message.body);
     
-    // Save the image locally
-    const imagePath = path.join(imagesDir, `image-${Date.now()}.png`);
-    fs.writeFileSync(imagePath, buffer);
+    // Send emoji response
+    await message.reply(emoji);
     
-    // Send the image back to the user
-    const chat = await message.getChat();
-    await chat.sendMessage(`Generated image based on: "${message.body}"`, {
-      media: imagePath,
-    });
-    
-    console.log(`Sent image response for: ${message.body}`);
+    console.log(`Sent emoji response for: ${message.body}`);
   } catch (error) {
     console.error('Error processing message:', error);
-    message.reply('Sorry, I encountered an error generating your image. Please try again later.');
+    message.reply('Sorry, I encountered an error. Please try again later.');
   }
 });
 

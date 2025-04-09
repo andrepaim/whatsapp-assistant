@@ -1,7 +1,7 @@
 {
-  "name": "whatsapp-image-bot",
+  "name": "whatsapp-emoji-bot",
   "version": "1.0.0",
-  "description": "WhatsApp bot that generates images based on messages",
+  "description": "WhatsApp bot that replies with appropriate emojis",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
