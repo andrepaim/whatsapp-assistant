@@ -114,6 +114,7 @@ jobs:
             authStrategy: new RemoteAuth({
               clientId: "whatsapp-test-bot",
               store: firebaseStorage,
+              backupSyncIntervalMs: 300000 // 5 minutes
             }),
             puppeteer: {
               browserWSEndpoint: "${{ github.event.inputs.remote_endpoint }}",

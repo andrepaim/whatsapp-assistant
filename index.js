@@ -113,6 +113,7 @@ const client = new Client({
   authStrategy: new RemoteAuth({
     clientId: "whatsapp-bot",
     store: firebaseStorage,
+    backupSyncIntervalMs: 300000 // 5 minutes
   }),
   puppeteer: {
     browserWSEndpoint: process.env.PUPPETEER_WS_ENDPOINT,

@@ -92,8 +92,45 @@ jobs:
         EOF
         
         # Extract FirebaseStorageAdapter for testing
-        grep -A 60 "class FirebaseStorageAdapter" index.js > firebase-adapter.js
-        echo "module.exports = { FirebaseStorageAdapter };" >> firebase-adapter.js
+        echo "class FirebaseStorageAdapter {
+          constructor(bucket) {
+            this.bucket = bucket;
+          }
+        
+          async set(key, value) {
+            const file = this.bucket.file(key);
+            await file.save(JSON.stringify(value));
+          }
+        
+          async get(key) {
+            const file = this.bucket.file(key);
+            try {
+              const [data] = await file.download();
+              return JSON.parse(data.toString());
+            } catch (error) {
+              if (error.code === 404) return null; // File not found
+              throw error;
+            }
+          }
+        
+          async delete(key) {
+            const file = this.bucket.file(key);
+            await file.delete({ ignoreNotFound: true });
+          }
+        
+          async getAll() {
+            const [files] = await this.bucket.getFiles();
+            const sessions = [];
+            for (const file of files) {
+              const key = file.name;
+              const [data] = await file.download();
+              sessions.push({ key, data: JSON.parse(data.toString()) });
+            }
+            return sessions;
+          }
+        }
+        
+        module.exports = { FirebaseStorageAdapter };" > firebase-adapter.js
         
         # Run the test
         node test-firebase.js
