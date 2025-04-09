@@ -64,7 +64,8 @@ client.on('message', async (message) => {
 
     // Check if the message has a body (text content)
     if (!message.body || message.hasMedia) {
-      await message.reply('I can only respond to text messages for now.');
+      const chat = await message.getChat();
+      await chat.sendMessage('I can only respond to text messages for now.');
       console.log('Received a media message, informed user about text-only capability');
       return;
     }
@@ -78,13 +79,20 @@ client.on('message', async (message) => {
     // Get response from LLM
     const response = await getResponseFromLLM(message.body);
     
-    // Send LLM response
-    await message.reply(response);
+    // Send LLM response - use a direct message rather than reply
+    // This avoids issues with quoted messages that might not exist
+    await chat.sendMessage(response);
     
     console.log(`Sent LLM response for: ${message.body}`);
   } catch (error) {
     console.error('Error processing message:', error);
-    message.reply('Sorry, I encountered an error. Please try again later.');
+    try {
+      // Try to send a direct message instead of a reply
+      const chat = await message.getChat();
+      await chat.sendMessage('Sorry, I encountered an error. Please try again later.');
+    } catch (secondError) {
+      console.error('Failed to send error message:', secondError);
+    }
   }
 });
 
