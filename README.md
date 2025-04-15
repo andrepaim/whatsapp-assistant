@@ -1,0 +1,113 @@
+# WhatsApp AI Assistant
+
+A WhatsApp bot that responds with helpful, contextually relevant information using LangChain.js for flexible LLM integration. By default, it connects to OpenRouter, but can be configured to use other providers. It automatically detects and responds in the user's language with persistent conversation history.
+
+## Requirements
+
+- Node.js v16 or higher
+- WhatsApp account
+- Default: An OpenRouter API key
+- Alternative: Any LLM provider supported by LangChain.js
+
+## Setup
+
+1. Install dependencies:
+   ```
+   npm install
+   ```
+
+2. The default system prompt is defined in `system-prompt.js`. You can edit this file to change the default behavior of the bot.
+
+3. Configure the bot (optional):
+   Create a `.env` file with your configuration (defaults are provided if not specified):
+   ```
+   # LLM Provider (defaults to 'openrouter')
+   LLM_PROVIDER=openrouter
+   
+   # Model name (provider-specific)
+   LLM_MODEL=openai/gpt4.1-nano
+   
+   # Base URL for the API (defaults to OpenRouter's API endpoint)
+   LLM_API_BASE=https://openrouter.ai/api/v1
+   
+   # API key (required for your provider)
+   LLM_API_KEY=your-api-key
+   
+   # System prompt for the LLM (override the default in system-prompt.js)
+   SYSTEM_PROMPT=your-custom-prompt
+   ```
+
+4. Start the bot:
+   ```
+   npm start
+   ```
+
+5. Scan the QR code with your WhatsApp mobile app:
+   - Open WhatsApp on your phone
+   - Tap Menu or Settings and select "Linked Devices"
+   - Tap "Link a Device"
+   - Point your phone at the QR code displayed in the terminal
+
+## Usage
+
+- Send any text message to the bot, and it will reply with helpful, contextually relevant information
+- The bot automatically detects and responds in the same language you're using
+- The bot will show a "typing" indicator while crafting its response
+- The bot remembers conversation history (up to 20 messages by default) to provide more contextual responses
+- Conversation history is persisted between bot restarts
+
+## Configuration
+
+You can customize the bot by setting these environment variables in your `.env` file:
+
+- `LLM_PROVIDER`: The LLM provider to use (default: openrouter)
+- `LLM_MODEL`: The model to use (default: openai/gpt4.1-nano)
+- `LLM_API_BASE`: Base URL for the API (default: https://openrouter.ai/api/v1)
+- `LLM_API_KEY`: API key for providers that require authentication
+- `SYSTEM_PROMPT`: System prompt to guide the LLM's responses (override the default in system-prompt.js)
+- `CHAT_HISTORY_LIMIT`: Maximum number of messages to keep in conversation history (default: 20)
+
+## Using with Different LLM Providers
+
+Thanks to LangChain.js integration, this bot supports a wide range of LLM providers beyond OpenRouter:
+
+### OpenAI Example
+```
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-3.5-turbo
+LLM_API_BASE=https://api.openai.com/v1
+LLM_API_KEY=your-openai-api-key
+```
+
+### Azure OpenAI Example
+```
+LLM_PROVIDER=azure
+LLM_MODEL=gpt-4
+LLM_API_BASE=https://your-resource.openai.azure.com
+LLM_API_KEY=your-azure-api-key
+```
+
+### Anthropic Example
+```
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-3-haiku
+LLM_API_KEY=your-anthropic-api-key
+```
+
+For the complete list of supported providers, visit the [LangChain.js documentation](https://js.langchain.com/docs/integrations/chat/).
+
+## Notes
+
+This bot uses:
+- [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) for WhatsApp integration
+- [LangChain.js](https://js.langchain.com/) for LLM integration
+- [OpenRouter](https://openrouter.ai/) as the default LLM provider
+
+## Chat History
+
+The bot maintains conversation history for each chat:
+- Chat history is stored in JSON files in the `data/` directory
+- Each chat has its own history file identified by WhatsApp chat ID
+- History includes both user messages and bot responses
+- The system automatically limits history to the most recent messages (default: 20)
+- This enables the bot to provide more contextually relevant responses based on the ongoing conversation

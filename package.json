@@ -1,0 +1,23 @@
+{
+  "name": "whatsapp-joke-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp bot that responds to messages with contextual jokes using LangChain for multi-provider LLM integration",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@langchain/community": "^0.3.40",
+    "@langchain/openai": "^0.5.5",
+    "axios": "^1.8.4",
+    "dotenv": "^16.4.7",
+    "langchain": "^0.3.21",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.23.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "sinon": "^17.0.1"
+  }
+}
