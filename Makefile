@@ -25,6 +25,11 @@ help:
 	@echo "  clean          - Remove node_modules"
 	@echo "  backup         - Backup WhatsApp session data and chat history"
 	@echo "  upload-secrets - Upload secrets from .env file to GitHub"
+	@echo "  tf-setup       - Setup Terraform configuration from example"
+	@echo "  tf-init        - Initialize Terraform"
+	@echo "  tf-plan        - Plan Terraform deployment"
+	@echo "  tf-apply       - Apply Terraform configuration"
+	@echo "  tf-destroy     - Remove all Terraform-managed resources"
 
 # Local development
 .PHONY: install
@@ -86,3 +91,35 @@ upload-secrets:
 	@grep -E "^CHAT_HISTORY_LIMIT=" .env | cut -d= -f2- | xargs -I{} gh secret set CHAT_HISTORY_LIMIT --body "{}" || true
 	@grep -E "^PUPPETEER_ARGS=" .env | cut -d= -f2- | xargs -I{} gh secret set PUPPETEER_ARGS --body "{}" || true
 	@echo "Secrets uploaded successfully"
+
+# Terraform commands
+.PHONY: tf-setup
+tf-setup:
+	@echo "Setting up Terraform configuration..."
+	@if [ ! -f terraform/terraform.tfvars ]; then \
+		cp terraform/terraform.tfvars.example terraform/terraform.tfvars; \
+		echo "Created terraform.tfvars from example. Please edit with your configuration."; \
+	else \
+		echo "terraform.tfvars already exists."; \
+	fi
+
+.PHONY: tf-init
+tf-init:
+	@echo "Initializing Terraform..."
+	cd terraform && terraform init
+
+.PHONY: tf-plan
+tf-plan:
+	@echo "Planning Terraform deployment..."
+	cd terraform && terraform plan
+
+.PHONY: tf-apply
+tf-apply:
+	@echo "Applying Terraform configuration..."
+	cd terraform && terraform apply
+
+.PHONY: tf-destroy
+tf-destroy:
+	@echo "Removing all Terraform-managed resources..."
+	@echo "This will DELETE all resources created by Terraform. Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
+	cd terraform && terraform destroy
