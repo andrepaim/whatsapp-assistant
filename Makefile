@@ -24,6 +24,7 @@ help:
 	@echo "  docker-logs    - View Docker container logs"
 	@echo "  clean          - Remove node_modules"
 	@echo "  backup         - Backup WhatsApp session data and chat history"
+	@echo "  upload-secrets - Upload secrets from .env file to GitHub"
 
 # Local development
 .PHONY: install
@@ -70,3 +71,18 @@ clean:
 backup:
 	mkdir -p backups
 	tar -czf backups/whatsapp-backup-$(shell date +%Y%m%d-%H%M%S).tar.gz data .wwebjs_auth
+
+.PHONY: upload-secrets
+upload-secrets:
+	@echo "Uploading secrets from .env file to GitHub..."
+	@if [ ! -f .env ]; then echo "Error: .env file not found"; exit 1; fi
+	@which gh > /dev/null || { echo "Error: GitHub CLI (gh) is not installed. Please install it first."; exit 1; }
+	@grep -E "^GCP_PROJECT_ID=" .env | cut -d= -f2- | xargs -I{} gh secret set GCP_PROJECT_ID --body "{}"
+	@grep -E "^GCP_SA_KEY=" .env | cut -d= -f2- | xargs -I{} gh secret set GCP_SA_KEY --body "{}"
+	@grep -E "^LLM_PROVIDER=" .env | cut -d= -f2- | xargs -I{} gh secret set LLM_PROVIDER --body "{}"
+	@grep -E "^LLM_MODEL=" .env | cut -d= -f2- | xargs -I{} gh secret set LLM_MODEL --body "{}"
+	@grep -E "^LLM_API_BASE=" .env | cut -d= -f2- | xargs -I{} gh secret set LLM_API_BASE --body "{}"
+	@grep -E "^LLM_API_KEY=" .env | cut -d= -f2- | xargs -I{} gh secret set LLM_API_KEY --body "{}"
+	@grep -E "^CHAT_HISTORY_LIMIT=" .env | cut -d= -f2- | xargs -I{} gh secret set CHAT_HISTORY_LIMIT --body "{}" || true
+	@grep -E "^PUPPETEER_ARGS=" .env | cut -d= -f2- | xargs -I{} gh secret set PUPPETEER_ARGS --body "{}" || true
+	@echo "Secrets uploaded successfully"
