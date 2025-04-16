@@ -50,10 +50,17 @@ A Node.js application that integrates WhatsApp with various Large Language Model
    - GitHub Actions workflow for Google Cloud Run
    - Configured with repository secrets
 
-## Testing
+## Testing and Development Approach
+- Test-Driven Development (TDD) must be followed for all new features
 - Jest for unit testing
 - Mock implementations for WhatsApp, LangChain and filesystem
 - Test coverage reports generated during CI
+- Always write tests first, then implement the feature
+- Tests should verify behavior, not implementation details
+- Focus on writing high-quality tests that provide actual value
+- Avoid writing code that only aims to pass tests without proper implementation
+- Maintain high test coverage (aim for >90% line coverage)
+- Tests should be meaningful and verify actual business requirements
 
 ## Development Commands
 - Build/Start: `npm start`
