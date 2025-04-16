@@ -56,6 +56,27 @@ A WhatsApp bot that responds with helpful, contextually relevant information usi
 - The bot remembers conversation history (up to 20 messages by default) to provide more contextual responses
 - Conversation history is persisted between bot restarts
 
+## CI/CD Pipelines
+
+This project includes GitHub Actions workflows for testing and deployment:
+
+1. **PR Testing**: Automatically runs tests on pull requests to ensure code quality
+   - Executes Jest tests
+   - Uploads test coverage reports
+
+2. **Cloud Run Deployment**: Automatically deploys to Google Cloud Run when changes are merged to main
+   - Builds and pushes Docker image to Google Container Registry
+   - Deploys to Cloud Run with proper environment configuration
+   - Sets up persistent storage volumes
+
+To use these workflows, you'll need to configure the following GitHub repository secrets:
+- `GCP_PROJECT_ID`: Your Google Cloud project ID
+- `GCP_SA_KEY`: Base64-encoded service account key with deployment permissions
+- `LLM_PROVIDER`: Your LLM provider (defaults to openrouter if not set)
+- `LLM_MODEL`: Model to use
+- `LLM_API_BASE`: API base URL
+- `LLM_API_KEY`: Your LLM provider API key
+
 ## Configuration
 
 You can customize the bot by setting these environment variables in your `.env` file:
