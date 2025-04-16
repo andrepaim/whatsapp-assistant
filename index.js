@@ -142,6 +142,9 @@ async function getResponseFromLLM(message, chatId) {
 // Initialize WhatsApp client
 const client = new Client({
   authStrategy: new LocalAuth(),
+  puppeteer: {
+    args: process.env.PUPPETEER_ARGS ? process.env.PUPPETEER_ARGS.split(' ') : []
+  }
 });
 
 // Generate QR code for WhatsApp Web

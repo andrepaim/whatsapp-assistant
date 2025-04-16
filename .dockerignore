@@ -1,0 +1,33 @@
+# Node
+node_modules
+npm-debug.log
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Environment and secrets
+.env
+*.env
+
+# Git
+.git
+.gitignore
+
+# Testing
+coverage
+
+# Development environments
+.devcontainer
+.vscode
+
+# Other
+.DS_Store
+*.log
+*~
+.*~
+Makefile
+CLAUDE.md
+test.js
+test-env.js
+.wwebjs_auth/session*
