@@ -1,8 +1,12 @@
 {
-  "name": "WhatsApp Joke Bot",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:18",
+  "name": "WhatsApp Assistant",
+  "dockerFile": "Dockerfile",
   "forwardPorts": [],
   "postCreateCommand": "npm install",
+  "mounts": [
+    "source=${localWorkspaceFolder}/data,target=/app/data,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/.wwebjs_auth,target=/app/.wwebjs_auth,type=bind,consistency=cached"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [

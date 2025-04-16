@@ -1,9 +1,27 @@
-FROM mcr.microsoft.com/devcontainers/javascript-node:18
+FROM node:18-slim
 
-# Install global Node packages if needed
-# RUN npm install -g <package>
+# Install Chromium and dependencies
+RUN apt-get update && apt-get install -y \
+    chromium \
+    libglib2.0-0 \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    fonts-freefont-ttf \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy configuration files if needed
-# COPY .bashrc /root/.bashrc
-
-# Any additional setup can go here
+# Set environment variables for puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    PUPPETEER_ARGS="--no-sandbox"
