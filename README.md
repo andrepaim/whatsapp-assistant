@@ -79,12 +79,11 @@ LLM_API_BASE=https://api.openai.com/v1
 LLM_API_KEY=your-openai-api-key
 ```
 
-### Azure OpenAI Example
+### Ollama Example
 ```
-LLM_PROVIDER=azure
-LLM_MODEL=gpt-4
-LLM_API_BASE=https://your-resource.openai.azure.com
-LLM_API_KEY=your-azure-api-key
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3
+LLM_API_BASE=http://localhost:11434
 ```
 
 ### Anthropic Example
