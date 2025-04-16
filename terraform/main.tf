@@ -15,6 +15,19 @@ provider "google" {
   region  = var.region
 }
 
+# Load variables from .env file
+locals {
+  env_vars = { for line in compact(split("\n", file("${path.module}/../.env"))) :
+    split("=", line)[0] => join("=", slice(split("=", line), 1, length(split("=", line))))
+  }
+  
+  # Extract values with defaults
+  llm_provider       = lookup(local.env_vars, "LLM_PROVIDER", var.llm_provider)
+  llm_model          = lookup(local.env_vars, "LLM_MODEL", var.llm_model)
+  llm_api_base       = lookup(local.env_vars, "LLM_API_BASE", var.llm_api_base)
+  chat_history_limit = lookup(local.env_vars, "CHAT_HISTORY_LIMIT", tostring(var.chat_history_limit))
+}
+
 resource "google_cloud_run_service" "whatsapp_assistant" {
   name     = "whatsapp-assistant"
   location = var.region
@@ -33,17 +46,17 @@ resource "google_cloud_run_service" "whatsapp_assistant" {
 
         env {
           name  = "LLM_PROVIDER"
-          value = var.llm_provider
+          value = local.llm_provider
         }
 
         env {
           name  = "LLM_MODEL"
-          value = var.llm_model
+          value = local.llm_model
         }
 
         env {
           name  = "LLM_API_BASE"
-          value = var.llm_api_base
+          value = local.llm_api_base
         }
 
         env {
@@ -58,7 +71,7 @@ resource "google_cloud_run_service" "whatsapp_assistant" {
 
         env {
           name  = "CHAT_HISTORY_LIMIT"
-          value = var.chat_history_limit
+          value = local.chat_history_limit
         }
 
         volume_mounts {
@@ -139,6 +152,12 @@ resource "google_secret_manager_secret" "llm_api_key" {
   replication {
     automatic = true
   }
+}
+
+# Create secret version from .env file
+resource "google_secret_manager_secret_version" "llm_api_key_version" {
+  secret      = google_secret_manager_secret.llm_api_key.id
+  secret_data = lookup(local.env_vars, "LLM_API_KEY", "")
 }
 
 resource "google_secret_manager_secret_iam_binding" "llm_api_key_access" {

@@ -8,44 +8,49 @@ This directory contains Terraform configurations to deploy the WhatsApp Assistan
 - [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) installed and configured
 - A Google Cloud project with billing enabled
 - Docker image of the application pushed to Google Container Registry
+- `.env` file in the root directory with your configuration
 
 ## Configuration
 
-1. Copy the example variables file:
+1. Make sure your `.env` file in the project root contains all necessary variables:
    ```
-   cp terraform.tfvars.example terraform.tfvars
+   LLM_PROVIDER=openrouter
+   LLM_MODEL=openai/gpt4.1-nano
+   LLM_API_BASE=https://openrouter.ai/api/v1
+   LLM_API_KEY=your-api-key
+   CHAT_HISTORY_LIMIT=20
    ```
 
-2. Edit `terraform.tfvars` to set your GCP project ID and other preferences
-
-3. Create a service account for the Cloud Run service:
+2. Create a service account for the Cloud Run service (if deploying manually):
    ```
    gcloud iam service-accounts create whatsapp-assistant --display-name="WhatsApp Assistant Service Account"
-   ```
-
-4. Create and populate the API key secret:
-   ```
-   echo -n "your-llm-api-key" | gcloud secrets create llm-api-key --data-file=-
    ```
 
 ## Deployment
 
 Initialize Terraform:
 ```
-terraform init
+make tf-init
 ```
 
 Plan your deployment:
 ```
-terraform plan
+make tf-plan
 ```
 
 Apply the configuration:
 ```
-terraform apply
+make tf-apply
 ```
 
 After deployment, the terminal will display deployment instructions with next steps.
+
+## How It Works
+
+- Terraform automatically reads variables from your `.env` file
+- API keys are securely stored in Google Secret Manager
+- Configuration is applied to the Cloud Run service as environment variables
+- All values in the `.env` file will override the defaults in variables.tf
 
 ## Accessing the Application
 
@@ -67,16 +72,9 @@ The deployment configures the following IAM permissions:
 - The Cloud Run service account has access to the Secret Manager secret
 - The Cloud Run service allows unauthenticated access
 
-## Environment Variables
-
-All application configuration is managed through environment variables defined in the terraform configuration, including:
-- LLM provider and model selection
-- API endpoints
-- Chat history settings
-
 ## Cleanup
 
 To remove all resources:
 ```
-terraform destroy
+make tf-destroy
 ```
