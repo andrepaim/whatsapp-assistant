@@ -19,7 +19,6 @@ const LLM_CONFIG = {
   system_prompt: require('./system-prompt.js'),
   chat_history_limit: parseInt(process.env.CHAT_HISTORY_LIMIT || '20')
 };
-console.log(`LLM provider: ${LLM_CONFIG.provider}, model: ${LLM_CONFIG.model}, key: ${LLM_CONFIG.api_key}`);
 
 // Chat history storage
 const CHAT_HISTORY_DIR = path.join(__dirname, 'data');
