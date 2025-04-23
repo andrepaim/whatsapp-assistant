@@ -2,6 +2,39 @@
 
 Um bot divertido de WhatsApp que conta piadas em português brasileiro usando LangChain.js e integração MCP para acessar um banco de piadas. O bot responde a pedidos de piadas sobre temas específicos, coleta feedback dos usuários e mantém uma conversa informal e descontraída.
 
+## Debugging e Logs
+
+O ZueiraBOT inclui um sistema de logging detalhado para facilitar o diagnóstico de problemas:
+
+### Logs de Conexão
+- `INITIALIZATION`: Logs de início do bot e configuração
+- `LOADING SCREEN`: Progresso da inicialização do cliente WhatsApp
+- `AUTHENTICATED`: Confirmação de autenticação bem-sucedida
+- `SUCCESS`: Cliente WhatsApp conectado e pronto
+- `DISCONNECTED`: Cliente desconectado e motivo
+
+### Logs de Mensagens
+- `MESSAGE RECEIVED`: Detalhes completos de mensagens recebidas
+- `PROCESSING MESSAGE`: Texto da mensagem em processamento
+- `SKIPPING`: Mensagens ignoradas (enviadas pelo próprio bot)
+- `MEDIA MESSAGE`: Detecção de mensagens com mídia
+
+### Logs do LLM
+- `LLM REQUEST`: Detalhes da solicitação ao modelo de linguagem
+- `LLM CONFIG`: Configuração do provedor e modelo
+- `LLM RESPONSE RECEIVED`: Tempo de resposta e tamanho
+
+### Logs de Histórico
+- `HISTORY`: Operações de leitura/gravação do histórico de conversas
+- `HISTORY ERROR`: Erros detalhados de manipulação de arquivos
+
+### Logs MCP
+- `MCP INIT`: Inicialização da conexão com o servidor MCP
+- `MCP SUCCESS`: Ferramentas carregadas com sucesso
+- `MCP ERROR`: Problemas de conexão ou carregamento
+
+Cada categoria de log inclui detalhes específicos para ajudar a identificar a causa raiz de problemas. Em caso de falha, o bot também salva arquivos de backup de erros para ajudar na depuração.
+
 ## Requirements
 
 - Node.js v16 or higher

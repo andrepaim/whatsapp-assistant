@@ -37,11 +37,12 @@ COPY . .
 # Create data directory for persistent storage if it doesn't exist
 RUN mkdir -p data
 
-# Create WhatsApp session directory if it doesn't exist
+# Create WhatsApp session directories if they don't exist
 RUN mkdir -p .wwebjs_auth
+RUN mkdir -p .wwebjs_cache
 
 # Volume mount points for persistent data
-VOLUME ["/app/data", "/app/.wwebjs_auth"]
+VOLUME ["/app/data", "/app/.wwebjs_auth", "/app/.wwebjs_cache"]
 
 # Expose the default port if needed
 # EXPOSE 3000

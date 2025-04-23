@@ -42,10 +42,11 @@ docker-build:
 
 .PHONY: docker-run
 docker-run:
-	mkdir -p $(DATA_DIR) $(AUTH_DIR)
+	mkdir -p $(DATA_DIR) $(AUTH_DIR) $(shell pwd)/.wwebjs_cache
 	docker run -d --name $(CONTAINER_NAME) \
 		-v $(DATA_DIR):/app/data \
 		-v $(AUTH_DIR):/app/.wwebjs_auth \
+		-v $(shell pwd)/.wwebjs_cache:/app/.wwebjs_cache \
 		-e LLM_PROVIDER=$(LLM_PROVIDER) \
 		-e LLM_MODEL=$(LLM_MODEL) \
 		-e LLM_API_BASE=$(LLM_API_BASE) \
