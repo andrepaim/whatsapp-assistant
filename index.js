@@ -6,6 +6,7 @@ const { ChatPromptTemplate } = require('@langchain/core/prompts');
 const fs = require('fs');
 const path = require('path');
 const { HumanMessage, AIMessage, SystemMessage } = require('@langchain/core/messages');
+const { MultiServerMCPClient } = require('@langchain/mcp-adapters');
 
 // Load environment variables
 dotenv.config();
@@ -17,7 +18,8 @@ const LLM_CONFIG = {
   api_base: process.env.LLM_API_BASE || 'https://openrouter.ai/api/v1',
   api_key: process.env.LLM_API_KEY || '',
   system_prompt: require('./system-prompt.js'),
-  chat_history_limit: parseInt(process.env.CHAT_HISTORY_LIMIT || '20')
+  chat_history_limit: parseInt(process.env.CHAT_HISTORY_LIMIT || '20'),
+  mcp_server_url: process.env.MCP_SERVER_URL || ''
 };
 
 // Chat history storage
@@ -71,6 +73,34 @@ function saveChatHistory(chatId, messages) {
   }
 }
 
+// Initialize MCP client and tools
+let mcpClient = null;
+let mcpTools = [];
+
+// Initialize MCP client if MCP server URL is provided
+async function initMCPClient() {
+  if (LLM_CONFIG.mcp_server_url) {
+    try {
+      console.log(`Initializing MCP client with server URL: ${LLM_CONFIG.mcp_server_url}`);
+      mcpClient = new MultiServerMCPClient({
+        serverUrl: LLM_CONFIG.mcp_server_url,
+        transport: 'sse', // Server-Sent Events transport
+      });
+      
+      // Fetch available tools from the MCP server
+      mcpTools = await mcpClient.getTools();
+      console.log(`Loaded ${mcpTools.length} tools from MCP server`);
+    } catch (error) {
+      console.error('Error initializing MCP client:', error.message);
+      mcpClient = null;
+      mcpTools = [];
+    }
+  }
+}
+
+// Call initMCPClient during startup
+initMCPClient();
+
 // Function to get response from LLM using LangChain
 async function getResponseFromLLM(message, chatId) {
   try {
@@ -122,8 +152,29 @@ async function getResponseFromLLM(message, chatId) {
     // For LLM, only use the most recent messages within the limit
     const limitedHistory = chatHistory.slice(-LLM_CONFIG.chat_history_limit);
     
-    // Use the chat model directly with message history
-    const response = await chatModel.invoke(limitedHistory);
+    let response;
+    
+    // If MCP tools are available, use them with the LLM
+    if (mcpTools && mcpTools.length > 0) {
+      try {
+        // Create an agent with MCP tools
+        const agent = await chatModel.createAgent({
+          tools: mcpTools
+        });
+        
+        // Invoke the agent with chat history and tools
+        response = await agent.invoke({
+          messages: limitedHistory
+        });
+      } catch (error) {
+        console.error('Error using MCP agent, falling back to standard LLM:', error.message);
+        // Fallback to standard LLM if agent fails
+        response = await chatModel.invoke(limitedHistory);
+      }
+    } else {
+      // Use the chat model directly without tools
+      response = await chatModel.invoke(limitedHistory);
+    }
     
     // Add the AI response to history and save
     chatHistory.push(new AIMessage(response.content));
@@ -135,6 +186,13 @@ async function getResponseFromLLM(message, chatId) {
     if (error.response) {
       console.error('API Error:', error.response.data);
     }
+    
+    // If MCP initialization failed during this request, try to reinitialize for next request
+    if (LLM_CONFIG.mcp_server_url && (!mcpClient || mcpTools.length === 0)) {
+      console.log('Scheduling MCP client reinitialization...');
+      setTimeout(initMCPClient, 5000); // Try again in 5 seconds
+    }
+    
     throw new Error('Failed to get response from LLM');
   }
 }
@@ -156,6 +214,11 @@ client.on('qr', (qr) => {
 client.on('ready', () => {
   console.log('WhatsApp client is ready!');
   console.log(`Using LLM provider: ${LLM_CONFIG.provider}, model: ${LLM_CONFIG.model}`);
+  
+  // Log MCP server status if configured
+  if (LLM_CONFIG.mcp_server_url) {
+    console.log(`MCP server configured: ${LLM_CONFIG.mcp_server_url}`);
+  }
 });
 
 client.on('message', async (message) => {
@@ -209,6 +272,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { 
     getResponseFromLLM,
     loadChatHistory,
-    saveChatHistory
+    saveChatHistory,
+    initMCPClient
   };
 }

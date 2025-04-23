@@ -48,7 +48,8 @@ ENV LLM_PROVIDER=openrouter \
     LLM_MODEL=openai/gpt4.1-nano \
     LLM_API_BASE=https://openrouter.ai/api/v1 \
     CHAT_HISTORY_LIMIT=20 \
-    PUPPETEER_ARGS="--no-sandbox"
+    PUPPETEER_ARGS="--no-sandbox" \
+    MCP_SERVER_URL=""
 
 # Run the application
 CMD ["npm", "start"]

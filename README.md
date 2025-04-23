@@ -87,6 +87,7 @@ You can customize the bot by setting these environment variables in your `.env` 
 - `LLM_API_KEY`: API key for providers that require authentication
 - `SYSTEM_PROMPT`: System prompt to guide the LLM's responses (override the default in system-prompt.js)
 - `CHAT_HISTORY_LIMIT`: Maximum number of messages to keep in conversation history (default: 20)
+- `MCP_SERVER_URL`: URL for the MCP (Machine Cognition Protocol) server (optional)
 
 ## Using with Different LLM Providers
 
@@ -122,6 +123,7 @@ This bot uses:
 - [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) for WhatsApp integration
 - [LangChain.js](https://js.langchain.com/) for LLM integration
 - [OpenRouter](https://openrouter.ai/) as the default LLM provider
+- [MCP (Machine Cognition Protocol)](https://docs.anthropic.com/en/docs/agents-and-tools/mcp/overview) for tool integration (optional)
 
 ## Chat History
 
@@ -131,3 +133,29 @@ The bot maintains conversation history for each chat:
 - History includes both user messages and bot responses
 - The system automatically limits history to the most recent messages (default: 20)
 - This enables the bot to provide more contextually relevant responses based on the ongoing conversation
+
+## MCP Integration
+
+The bot supports connecting to an MCP (Machine Cognition Protocol) server to enable tool use:
+
+### What is MCP?
+MCP is a protocol that allows AI systems to use external tools and services. With MCP integration, the WhatsApp assistant can perform actions like:
+- Retrieving real-time information
+- Accessing specialized services
+- Interacting with APIs
+- Performing complex calculations
+
+### Setup MCP
+To enable MCP features:
+1. Set up an MCP server (either local or remote)
+2. Add the server URL to your `.env` file:
+   ```
+   MCP_SERVER_URL=http://your-mcp-server:8000
+   ```
+3. The bot will automatically detect and use available tools from the MCP server
+
+### Benefits
+- Enhanced capabilities beyond standard LLM responses
+- Access to up-to-date information
+- Ability to perform specialized tasks
+- Seamless integration with your existing LLM configuration
