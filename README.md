@@ -1,6 +1,6 @@
-# WhatsApp AI Assistant
+# ZueiraBOT - Bot de Piadas para WhatsApp
 
-A WhatsApp bot that responds with helpful, contextually relevant information using LangChain.js for flexible LLM integration. By default, it connects to OpenRouter, but can be configured to use other providers. It automatically detects and responds in the user's language with persistent conversation history.
+Um bot divertido de WhatsApp que conta piadas em português brasileiro usando LangChain.js e integração MCP para acessar um banco de piadas. O bot responde a pedidos de piadas sobre temas específicos, coleta feedback dos usuários e mantém uma conversa informal e descontraída.
 
 ## Requirements
 
@@ -48,13 +48,15 @@ A WhatsApp bot that responds with helpful, contextually relevant information usi
    - Tap "Link a Device"
    - Point your phone at the QR code displayed in the terminal
 
-## Usage
+## Como Usar
 
-- Send any text message to the bot, and it will reply with helpful, contextually relevant information
-- The bot automatically detects and responds in the same language you're using
-- The bot will show a "typing" indicator while crafting its response
-- The bot remembers conversation history (up to 20 messages by default) to provide more contextual responses
-- Conversation history is persisted between bot restarts
+- Envie uma mensagem para o bot pedindo uma piada sobre qualquer tema: "me conta uma piada de cachorro" ou "quero uma piada sobre programação"
+- O bot responderá em português brasileiro com uma piada sobre o tema solicitado
+- Após cada piada, o bot perguntará sua opinião sobre a piada
+- Você pode responder com feedback positivo ("adorei", "muito boa") ou negativo ("sem graça", "não gostei")
+- O bot usará seu feedback para melhorar e pedirá um novo tema para piada
+- A conversa é persistente entre reinicializações do bot
+- O ZueiraBOT usa um estilo informal e descontraído com gírias e expressões brasileiras
 
 ## CI/CD Pipelines
 
@@ -134,28 +136,33 @@ The bot maintains conversation history for each chat:
 - The system automatically limits history to the most recent messages (default: 20)
 - This enables the bot to provide more contextually relevant responses based on the ongoing conversation
 
-## MCP Integration
+## Integração MCP para Piadas e Feedback
 
-The bot supports connecting to an MCP (Machine Cognition Protocol) server to enable tool use:
+O ZueiraBOT utiliza o MCP (Machine Cognition Protocol) para duas funções principais:
 
-### What is MCP?
-MCP is a protocol that allows AI systems to use external tools and services. With MCP integration, the WhatsApp assistant can perform actions like:
-- Retrieving real-time information
-- Accessing specialized services
-- Interacting with APIs
-- Performing complex calculations
+### Banco de Piadas
+O bot se conecta a um servidor MCP para:
+- Buscar piadas sobre temas específicos solicitados pelo usuário
+- Formatar corretamente as piadas para envio
+- Criar piadas novas quando não existirem no banco de dados
 
-### Setup MCP
-To enable MCP features:
-1. Set up an MCP server (either local or remote)
-2. Add the server URL to your `.env` file:
+### Sistema de Feedback
+O MCP também é usado para:
+- Registrar feedback do usuário sobre as piadas (positivo/negativo)
+- Analisar preferências do usuário para melhorar as recomendações
+- Enriquecer o banco de dados de piadas com novas adições
+
+### Configuração do MCP
+Para ativar os recursos de piadas:
+1. Configure um servidor MCP (local ou remoto) com as ferramentas de piadas
+2. Adicione a URL do servidor ao seu arquivo `.env`:
    ```
-   MCP_SERVER_URL=http://your-mcp-server:8000
+   MCP_SERVER_URL=http://seu-servidor-mcp:8000
    ```
-3. The bot will automatically detect and use available tools from the MCP server
+3. O bot detectará automaticamente as ferramentas disponíveis no servidor MCP
 
-### Benefits
-- Enhanced capabilities beyond standard LLM responses
-- Access to up-to-date information
-- Ability to perform specialized tasks
-- Seamless integration with your existing LLM configuration
+### Benefícios
+- Acesso a uma vasta biblioteca de piadas brasileiras
+- Capacidade de personalizar as piadas com base no feedback do usuário
+- Respostas contextualmente relevantes e engraçadas
+- Experiência de usuário autenticamente brasileira

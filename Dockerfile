@@ -1,5 +1,8 @@
 FROM node:18-slim
 
+LABEL maintainer="ZueiraBOT Team"
+LABEL description="Bot de piadas brasileiro para WhatsApp com integração MCP"
+
 WORKDIR /app
 
 # Install Chromium dependencies

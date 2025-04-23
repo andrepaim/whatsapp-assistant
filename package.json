@@ -1,7 +1,7 @@
 {
-  "name": "whatsapp-joke-bot",
+  "name": "zueirabot",
   "version": "1.0.0",
-  "description": "WhatsApp bot that responds to messages with contextual jokes using LangChain for multi-provider LLM integration",
+  "description": "Bot de piadas brasileiro para WhatsApp com integração MCP para buscar piadas e registrar feedback dos usuários",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
