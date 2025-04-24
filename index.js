@@ -2,11 +2,15 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const dotenv = require('dotenv');
 const { ChatOpenAI } = require('@langchain/openai');
-const { ChatPromptTemplate } = require('@langchain/core/prompts');
-const fs = require('fs');
-const path = require('path');
-const { HumanMessage, AIMessage, SystemMessage } = require('@langchain/core/messages');
+const path = require('path'); // Keep path for system prompt require
+// Import necessary message types, including ToolMessage
+const { HumanMessage, AIMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
+const { Client : MCPClient } = require('@modelcontextprotocol/sdk/client/index.js');
+const { SSEClientTransport } = require('@modelcontextprotocol/sdk/client/sse.js');
+const { loadChatHistory, saveChatHistory } = require('./history.js'); // Import history functions
+const { createReactAgent }  = require("@langchain/langgraph/prebuilt");
 const { MultiServerMCPClient } = require('@langchain/mcp-adapters');
+
 
 // Load environment variables
 dotenv.config();
@@ -18,109 +22,10 @@ const LLM_CONFIG = {
   api_base: process.env.LLM_API_BASE || 'https://openrouter.ai/api/v1',
   api_key: process.env.LLM_API_KEY || '',
   system_prompt: require('./system-prompt.js'),
-  chat_history_limit: parseInt(process.env.CHAT_HISTORY_LIMIT || '20'),
   mcp_server_url: process.env.MCP_SERVER_URL || ''
 };
 
-// Chat history storage
-const CHAT_HISTORY_DIR = path.join(__dirname, 'data');
-if (!fs.existsSync(CHAT_HISTORY_DIR)) {
-  fs.mkdirSync(CHAT_HISTORY_DIR, { recursive: true });
-}
-
-// Function to load chat history from file
-function loadChatHistory(chatId) {
-  const historyFile = path.join(CHAT_HISTORY_DIR, `${chatId}.json`);
-  console.log(`HISTORY: Attempting to load from ${historyFile}`);
-  
-  try {
-    if (fs.existsSync(historyFile)) {
-      console.log(`HISTORY: File exists for ${chatId}`);
-      const data = fs.readFileSync(historyFile, 'utf8');
-      console.log(`HISTORY: Read ${data.length} bytes of data`);
-      
-      try {
-        const parsedData = JSON.parse(data);
-        console.log(`HISTORY: Successfully parsed JSON with ${parsedData.length} messages`);
-       
-        // Convert plain objects to LangChain message objects
-        const result = parsedData.map((msg, index) => {
-          console.log(`HISTORY: Converting message ${index + 1}/${parsedData.length} of type ${msg.type}`);
-          
-          if (msg.type === 'system') {
-            return new SystemMessage(msg.content);
-          } else if (msg.type === 'human') {
-            return new HumanMessage(msg.content);
-          } else if (msg.type === 'ai') {
-            return new AIMessage(msg.content);
-          }
-          console.warn(`HISTORY WARNING: Unknown message type "${msg.type}" at index ${index}`);
-          return null;
-        }).filter(msg => msg !== null);
-        
-        console.log(`HISTORY: Returning ${result.length} valid messages`);
-        return result;
-      } catch (parseError) {
-        console.error(`HISTORY ERROR: Failed to parse JSON for ${chatId}:`, parseError);
-        console.error('Invalid JSON content:', data.substring(0, 100) + '...');
-        return [];
-      }
-    } else {
-      console.log(`HISTORY: No existing history file for ${chatId}, starting fresh`);
-    }
-  } catch (error) {
-    console.error(`HISTORY ERROR: Failed to load chat history for ${chatId}:`, error);
-    console.error('Error stack:', error.stack);
-  }
-  return [];
-}
-
-// Function to save chat history to file
-function saveChatHistory(chatId, messages) {
-  const historyFile = path.join(CHAT_HISTORY_DIR, `${chatId}.json`);
-  console.log(`HISTORY: Saving ${messages.length} messages to ${historyFile}`);
-  
-  try {
-    // Convert LangChain message objects to serializable objects
-    console.log('HISTORY: Converting message objects to serializable format');
-    const serializedMessages = messages.map((msg, index) => {
-      const type = msg._getType();
-      //console.log(`HISTORY: Serializing message ${index + 1}/${messages.length} of type ${type}`);
-      return {
-        type: type,
-        content: msg.content
-      };
-    });
-    
-    // Limit history to the configured number of messages
-    const limitedMessages = serializedMessages.slice(-LLM_CONFIG.chat_history_limit);
-    console.log(`HISTORY: Limited to ${limitedMessages.length}/${serializedMessages.length} messages`);
-    
-    // Create JSON string with pretty formatting
-    const jsonData = JSON.stringify(limitedMessages, null, 2);
-    console.log(`HISTORY: Created JSON string (${jsonData.length} bytes)`);
-    
-    // Write to file
-    fs.writeFileSync(historyFile, jsonData, 'utf8');
-    console.log(`HISTORY: Successfully wrote history to ${historyFile}`);
-  } catch (error) {
-    console.error(`HISTORY ERROR: Failed to save chat history for ${chatId}:`, error);
-    console.error('Error stack:', error.stack);
-    
-    // Try to create a backup with error info to help debugging
-    try {
-      const errorInfo = {
-        timestamp: new Date().toISOString(),
-        error: error.message,
-        messageCount: messages.length
-      };
-      fs.writeFileSync(`${historyFile}.error`, JSON.stringify(errorInfo, null, 2), 'utf8');
-      console.log(`HISTORY: Created error backup at ${historyFile}.error`);
-    } catch (backupError) {
-      console.error('HISTORY ERROR: Failed to create error backup:', backupError);
-    }
-  }
-}
+// Chat history storage and functions are now in history.js
 
 // Initialize MCP client and tools
 let mcpClient = null;
@@ -135,34 +40,22 @@ async function initMCPClient() {
       // If MCP_SERVER_URL is set but server is not available, 
       // we don't want to block the application from starting
       try {
-        console.log('MCP INIT: Creating MultiServerMCPClient instance');
-        // Use the official MultiServerMCPClient from langchain-ai
+        console.log(`Initializing MCP client with server URL: ${LLM_CONFIG.mcp_server_url}`);
         mcpClient = new MultiServerMCPClient({
-          throwOnLoadError: false, // Don't throw if tools fail to load
-          mcpServers: {
-            joke: {
-              transport: "sse",
-              url: LLM_CONFIG.mcp_server_url,
-              useNodeEventSource: true, // Use Node.js EventSource for better header support
-              reconnect: {
-                enabled: true,
-                maxAttempts: 3,
-                delayMs: 1000
+            mcpServers : {
+              joke : {
+                transport: 'sse', // Server-Sent Events transport
+                url: LLM_CONFIG.mcp_server_url,
               }
             }
-          }
         });
         
-        console.log('MCP INIT: Client created, fetching available tools');
-        
         // Fetch available tools from the MCP server
-        const startTime = Date.now();
         mcpTools = await mcpClient.getTools();
-        const endTime = Date.now();
+        console.log(`Loaded ${mcpTools.length} tools from MCP server`);
         
         if (mcpTools && mcpTools.length > 0) {
-          console.log(`MCP SUCCESS: Loaded ${mcpTools.length} tools in ${endTime - startTime}ms`);
-          
+          console.log(`MCP SUCCESS: Loaded ${mcpTools.length} tools`);
           // Log tool names for debugging
           mcpTools.forEach((tool, index) => {
             console.log(`  Tool ${index + 1}: ${tool.name} - ${tool.description.substring(0, 50)}...`);
@@ -234,11 +127,11 @@ async function getResponseFromLLM(message, chatId) {
     } else {
       console.warn('WARNING: No API key provided for LLM');
     }
-    
+
+    let chat
     // Initialize the chat model
     console.log('Initializing ChatOpenAI model');
-    const chatModel = new ChatOpenAI(llmConfig);
-    
+
     // Load chat history for this chat
     console.log(`Loading chat history for ${chatId}`);
     const chatHistory = loadChatHistory(chatId);
@@ -255,58 +148,71 @@ async function getResponseFromLLM(message, chatId) {
     const userMessage = new HumanMessage(message);
     chatHistory.push(userMessage);
     
-    // For LLM, only use the most recent messages within the limit
-    const limitedHistory = chatHistory.slice(-LLM_CONFIG.chat_history_limit);
-    console.log(`Using ${limitedHistory.length} messages in limited history`);
-    
+    // For LLM, only use the most recent messages within the limit defined in history.js
+    // Note: We still need to slice here before sending to LLM, but the limit value comes from history.js via process.env
+    const historyLimitForLLM = parseInt(process.env.CHAT_HISTORY_LIMIT || '20'); 
+    const limitedHistory = chatHistory.slice(-historyLimitForLLM);
+    console.log(`Using ${limitedHistory.length} messages in limited history (Limit: ${historyLimitForLLM})`);
+    const model = new ChatOpenAI(llmConfig);
+
     let response;
-    
-    // If MCP tools are available, use them with the LLM
     if (mcpClient && mcpTools && mcpTools.length > 0) {
-      try {
-        console.log(`Using MCP client with ${mcpTools.length} tools available`);
+      console.log('Using MCP tools with the LLM');
+      // Create a React agent with the model and tools
+      chatModel = createReactAgent({
+        llm: model, 
+        tools: mcpTools,
+      });
+      response = await chatModel.invoke({
+        messages: limitedHistory,
+      });
+      
+      // Extract the final content from the response array
+      let finalContent = '';
+      if (response.messages && Array.isArray(response.messages)) {
+        // Find the last AIMessage in the array
+        for (let i = response.messages.length - 1; i >= 0; i--) {
+          const message = response.messages[i];
+          if (message._getType && message._getType() === 'ai') {
+            finalContent = message.content;
+            console.log('Found AI message content:', finalContent);
+            break;
+          }
+        }
         
-        // Create a chain with the LLM and tools
-        console.log('Creating LLM chain with tools');
-        const chain = await chatModel.bind({
-          tools: mcpTools,
-        });
-        
-        // Invoke the chain with chat history
-        console.log('Invoking LLM chain with tools');
-        const startTime = Date.now();
-        response = await chain.invoke(limitedHistory);
-        const endTime = Date.now();
-        console.log(`LLM response received in ${endTime - startTime}ms with tools`);
-      } catch (error) {
-        console.error('ERROR using MCP tools:', error.message);
-        console.error('Falling back to standard LLM without tools');
-        
-        // Fallback to standard LLM if agent fails
-        const startTime = Date.now();
-        response = await chatModel.invoke(limitedHistory);
-        const endTime = Date.now();
-        console.log(`Fallback LLM response received in ${endTime - startTime}ms without tools`);
+        // If no AIMessage was found, try to extract content from the last element
+        if (!finalContent && response.messages.length > 0) {
+          const lastElement = response.messages[response.messages.length - 1];
+          finalContent = lastElement.content || lastElement.output || '';
+          console.log('Using last element content:', finalContent);
+        }
+      } else if (response && response.content) {
+        // Handle case where response is a single message
+        finalContent = response.content;
+        console.log('Using single message content:', finalContent);
       }
+
+      // Add the AI response to chat history
+      if (finalContent) {
+        const aiMessage = new AIMessage(finalContent);
+        chatHistory.push(aiMessage);
+      }
+      return finalContent;
     } else {
-      // Use the chat model directly without tools
       console.log('No MCP tools available, using standard LLM');
-      const startTime = Date.now();
+      // Use the model directly without tools
+      chatModel = model;
       response = await chatModel.invoke(limitedHistory);
-      const endTime = Date.now();
-      console.log(`LLM response received in ${endTime - startTime}ms`);
+      const finalContent = response?.content ?? ''; // Default to empty string if content is null/undefined
+      chatHistory.push(new AIMessage(finalContent)); // Add the LLM response to chat history
+      console.log(`Saving updated chat history for ${chatId}`);
+      // Pass the potentially modified chatHistory (with tool calls/results)
+      saveChatHistory(chatId, chatHistory); 
+      return finalContent; // Return the final content
     }
-    
-    // Add the AI response to history and save
-    console.log(`Adding AI response to history (${response.content.length} chars)`);
-    chatHistory.push(new AIMessage(response.content));
-    
-    console.log(`Saving updated chat history for ${chatId}`);
-    saveChatHistory(chatId, chatHistory);
-    
-    return response.content;
   } catch (error) {
-    console.error(`ERROR calling ${LLM_CONFIG.provider} API:`, error.message);
+    // Log errors related to the LLM API call itself or the overall process
+    console.error(`ERROR in getResponseFromLLM for chat ${chatId}:`, error.message);
     console.error('Error stack:', error.stack);
     
     if (error.response) {
@@ -437,8 +343,9 @@ client.initialize();
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { 
     getResponseFromLLM,
-    loadChatHistory,
-    saveChatHistory,
+    // loadChatHistory, // Now imported
+    // saveChatHistory, // Now imported
     initMCPClient
+    // Exporting history functions is no longer needed here
   };
 }
