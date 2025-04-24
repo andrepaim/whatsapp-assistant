@@ -42,7 +42,7 @@ function loadChatHistory(chatId) {
       try {
         const parsedData = JSON.parse(data);
         console.log(`HISTORY: Successfully parsed JSON with ${parsedData.length} messages`);
-        
+       
         // Convert plain objects to LangChain message objects
         const result = parsedData.map((msg, index) => {
           console.log(`HISTORY: Converting message ${index + 1}/${parsedData.length} of type ${msg.type}`);
@@ -85,7 +85,7 @@ function saveChatHistory(chatId, messages) {
     console.log('HISTORY: Converting message objects to serializable format');
     const serializedMessages = messages.map((msg, index) => {
       const type = msg._getType();
-      console.log(`HISTORY: Serializing message ${index + 1}/${messages.length} of type ${type}`);
+      //console.log(`HISTORY: Serializing message ${index + 1}/${messages.length} of type ${type}`);
       return {
         type: type,
         content: msg.content
@@ -327,7 +327,7 @@ async function getResponseFromLLM(message, chatId) {
 // Initialize WhatsApp client
 console.log('Initializing WhatsApp client...');
 const client = new Client({
-  authStrategy: new LocalAuth(),
+  authStrategy: new LocalAuth({ dataPath: 'data' }), // Specify the data path
   puppeteer: {
     args: process.env.PUPPETEER_ARGS ? process.env.PUPPETEER_ARGS.split(' ') : []
   }
