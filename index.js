@@ -3,17 +3,21 @@ const qrcode = require('qrcode-terminal');
 const dotenv = require('dotenv');
 const { ChatOpenAI } = require('@langchain/openai');
 const path = require('path'); // Keep path for system prompt require
-// Import necessary message types, including ToolMessage
 const { HumanMessage, AIMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const { Client : MCPClient } = require('@modelcontextprotocol/sdk/client/index.js');
 const { SSEClientTransport } = require('@modelcontextprotocol/sdk/client/sse.js');
 const { loadChatHistory, saveChatHistory } = require('./history.js'); // Import history functions
 const { createReactAgent }  = require("@langchain/langgraph/prebuilt");
 const { MultiServerMCPClient } = require('@langchain/mcp-adapters');
+const { initLangSmith, withTracing } = require('./langsmith-integration.js');
+const { storeRunId, processFeedback } = require('./feedback-handler.js');
 
 
 // Load environment variables
 dotenv.config();
+
+// Initialize LangSmith tracing
+initLangSmith();
 
 // LLM configuration (with defaults)
 const LLM_CONFIG = {
@@ -87,7 +91,8 @@ async function initMCPClient() {
 initMCPClient();
 
 // Function to get response from LLM using LangChain
-async function getResponseFromLLM(message, chatId) {
+// Define the base function that will be wrapped with tracing
+async function _getResponseFromLLM(message, chatId) {
   try {
     console.log(`LLM REQUEST - Chat ID: ${chatId}, Message: "${message}"`);
     
@@ -230,6 +235,22 @@ async function getResponseFromLLM(message, chatId) {
   }
 }
 
+// Wrap the function with LangSmith tracing
+const getResponseFromLLM = withTracing(
+  _getResponseFromLLM,
+  "getResponseFromLLM",
+  {
+    service: "whatsapp-assistant",
+    component: "llm-interaction"
+  },
+  ["whatsapp", "llm", "joke-bot"],
+  // Store the run ID for the chat when a trace is created
+  (runId, message, chatId) => {
+    console.log(`Storing run ID ${runId} for chat ${chatId}`);
+    storeRunId(chatId, runId);
+  }
+);
+
 // Initialize WhatsApp client
 console.log('Initializing WhatsApp client...');
 const client = new Client({
@@ -304,6 +325,14 @@ client.on('message', async (message) => {
     // For WhatsApp, we use the chat ID as the unique identifier
     const chatId = chat.id._serialized;
     console.log(`Using chat ID for history: ${chatId}`);
+    
+    // Check if this message is feedback to a previous joke
+    // This is important for LangSmith traceability
+    const isFeedback = await processFeedback(message.body, chatId);
+    if (isFeedback) {
+      console.log(`Processed feedback for chat ${chatId}`);
+      // For feedback messages, we still want to respond, so we continue processing
+    }
     
     // Get response from LLM with chat history context
     console.log(`Requesting LLM response for message: "${message.body}"`);
