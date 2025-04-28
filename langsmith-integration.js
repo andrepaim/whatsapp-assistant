@@ -47,11 +47,13 @@ async function recordFeedback(runId, feedback, chatId, comment = '') {
   try {
     const langsmith = getLangSmithClient();
     
-    await langsmith.createFeedback(runId, {
-      key: "user_rating",
-      value: feedback === "positive" ? 1 : 0,
+    const score = feedback === "positive" ? 1 : 0;
+    
+    await langsmith.createFeedback(runId, "user_rating", {
+      score: score,
+      value: score,
       comment: comment || `Feedback from chat ${chatId}`,
-      source_info: {
+      sourceInfo: {
         source_type: "whatsapp",
         chat_id: chatId
       }

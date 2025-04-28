@@ -198,11 +198,13 @@ async function _getResponseFromLLM(message, chatId) {
       }
 
       // Add the AI response to chat history
-      if (finalContent) {
-        const aiMessage = new AIMessage(finalContent);
-        chatHistory.push(aiMessage);
-      }
-      return finalContent;
+          if (finalContent) {
+            const aiMessage = new AIMessage(finalContent);
+            chatHistory.push(aiMessage);
+          }
+          console.log(`Saving updated chat history for ${chatId}`);
+          await saveChatHistory(chatId, chatHistory);
+          return finalContent;
     } else {
       console.log('No MCP tools available, using standard LLM');
       // Use the model directly without tools
@@ -212,13 +214,16 @@ async function _getResponseFromLLM(message, chatId) {
       chatHistory.push(new AIMessage(finalContent)); // Add the LLM response to chat history
       console.log(`Saving updated chat history for ${chatId}`);
       // Pass the potentially modified chatHistory (with tool calls/results)
-      saveChatHistory(chatId, chatHistory); 
+      await saveChatHistory(chatId, chatHistory); 
       return finalContent; // Return the final content
     }
-  } catch (error) {
-    // Log errors related to the LLM API call itself or the overall process
-    console.error(`ERROR in getResponseFromLLM for chat ${chatId}:`, error.message);
-    console.error('Error stack:', error.stack);
+    } catch (error) {
+      // Log errors related to the LLM API call itself or the overall process
+      console.error(`Error calling ${LLM_CONFIG.provider} API:`, error.message);
+      console.error('Error stack:', error.stack);
+      await saveChatHistory(chatId, chatHistory);
+      // Save conversation history despite the error
+      try { await saveChatHistory(chatId, chatHistory); } catch (e) { console.error('Error saving history after failure:', e); }
     
     if (error.response) {
       console.error('API Error details:', error.response.data);
@@ -280,7 +285,7 @@ client.on('qr', (qr) => {
 });
 
 client.on('ready', () => {
-  console.log('SUCCESS: WhatsApp client is ready and connected!');
+      console.log('WhatsApp client is ready!');
   console.log(`Using LLM provider: ${LLM_CONFIG.provider}, model: ${LLM_CONFIG.model}`);
   
   // Log MCP server status if configured
@@ -300,7 +305,7 @@ client.on('message', async (message) => {
     
     // Only respond to messages that aren't from the bot itself
     if (message.fromMe) {
-      console.log(`SKIPPING: Message from myself (ID: ${message.id.id})`);
+      console.log('SKIPPING: Message from myself');
       return;
     }
 
@@ -308,7 +313,7 @@ client.on('message', async (message) => {
     if (!message.body || message.hasMedia) {
       console.log(`MEDIA MESSAGE: Received ${message.type} from ${message.from}`);
       const chat = await message.getChat();
-      console.log(`Getting chat info for ${chat.id._serialized}`);
+      console.log('Getting chat info');
       await chat.sendMessage('I can only respond to text messages for now.');
       console.log('Informed user about text-only capability');
       return;
@@ -370,11 +375,10 @@ client.initialize();
 
 // Export for testing
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { 
+  module.exports = {
     getResponseFromLLM,
-    // loadChatHistory, // Now imported
-    // saveChatHistory, // Now imported
+    loadChatHistory,
+    saveChatHistory,
     initMCPClient
-    // Exporting history functions is no longer needed here
   };
 }

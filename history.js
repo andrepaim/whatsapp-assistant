@@ -5,11 +5,7 @@ const { HumanMessage, AIMessage, SystemMessage, ToolMessage } = require('@langch
 const dataDir = path.join(__dirname, 'data');
 const historyLimit = parseInt(process.env.CHAT_HISTORY_LIMIT || '20'); // Default to 20 messages
 
-// Ensure the data directory exists
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-  console.log(`Created data directory: ${dataDir}`);
-}
+
 
 /**
  * Serializes a LangChain message object into a plain JSON object.
@@ -17,12 +13,17 @@ if (!fs.existsSync(dataDir)) {
  * @returns {object} A plain JSON object representing the message.
  */
 function serializeMessage(message) {
-  const messageJson = message.toJSON();
-  // Add the type explicitly for easier deserialization
-  return {
-    type: message._getType(),
-    ...messageJson,
-  };
+  // Handle LangChain message objects or plain objects in tests
+  if (message && typeof message.toJSON === 'function') {
+    const messageJson = message.toJSON();
+    return {
+      type: message._getType(),
+      ...messageJson,
+    };
+  } else {
+    // Plain object with type and content or serialized form
+    return message;
+  }
 }
 
 /**
@@ -74,9 +75,9 @@ function loadChatHistory(chatId) {
       // Deserialize messages, filtering out any null results from unknown types
       const deserializedHistory = historyData.map(deserializeMessage).filter(msg => msg !== null);
 
-      // Apply history limit *after* loading
+      // Return last N messages based on historyLimit
       const limitedHistory = deserializedHistory.slice(-historyLimit);
-      console.log(`Returning ${limitedHistory.length} messages after applying limit (${historyLimit}) for ${chatId}`);
+      console.log(`Returning ${limitedHistory.length} messages (limited to ${historyLimit}) for ${chatId}`);
       return limitedHistory;
 
     } catch (error) {
@@ -96,17 +97,17 @@ function loadChatHistory(chatId) {
  */
 function saveChatHistory(chatId, chatHistory) {
   const filePath = path.join(dataDir, `${chatId}.json`);
+  // Ensure data directory exists before saving history
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    console.log(`Created data directory for history: ${dataDir}`);
+  }
   console.log(`Attempting to save history to: ${filePath}`);
-
   try {
-    // Apply history limit *before* saving
-    const limitedHistory = chatHistory.slice(-historyLimit);
-    console.log(`Saving ${limitedHistory.length} messages after applying limit (${historyLimit}) for ${chatId}`);
-
-    // Serialize messages
-    const historyData = limitedHistory.map(serializeMessage);
-    const jsonContent = JSON.stringify(historyData, null, 2); // Pretty print JSON
-
+    console.log(`Saving ${chatHistory.length} messages for ${chatId}`);
+    const allData = chatHistory.map(serializeMessage);
+    const limitedData = allData.slice(-historyLimit);
+    const jsonContent = JSON.stringify(limitedData, null, 2);
     fs.writeFileSync(filePath, jsonContent, 'utf-8');
     console.log(`Successfully saved history file for ${chatId}.`);
   } catch (error) {
