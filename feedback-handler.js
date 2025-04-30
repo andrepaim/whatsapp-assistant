@@ -1,10 +1,15 @@
-const { recordFeedback } = require('./langsmith-integration.js');
+const { recordFeedback: recordLangSmithFeedback } = require('./langsmith-integration.js'); // Rename for clarity
 
 /**
  * Map of chat IDs to their most recent LangSmith run IDs
- * This allows us to associate feedback with the correct run
+ * This allows us to associate feedback with the correct run in LangSmith
  */
-const chatRunMap = new Map();
+const chatLangSmithRunMap = new Map();
+
+/**
+ * Map of chat IDs to the ID of the last joke told in that chat
+ */
+const chatLastJokeIdMap = new Map();
 
 /**
  * Store the run ID for a specific chat
@@ -12,31 +17,60 @@ const chatRunMap = new Map();
  * @param {string} runId - The LangSmith run ID
  */
 function storeRunId(chatId, runId) {
-  chatRunMap.set(chatId, runId);
-  console.log(`Stored run ID ${runId} for chat ${chatId}`);
+  chatLangSmithRunMap.set(chatId, runId);
+  console.log(`Stored LangSmith run ID ${runId} for chat ${chatId}`);
 }
 
 /**
  * Get the most recent run ID for a specific chat
  * @param {string} chatId - The chat ID
- * @returns {string|null} - The run ID or null if not found
+ * @returns {string|null} - The LangSmith run ID or null if not found
  */
 function getRunId(chatId) {
-  return chatRunMap.get(chatId) || null;
+  return chatLangSmithRunMap.get(chatId) || null;
 }
 
 /**
- * Process user feedback message and record it in LangSmith
- * @param {string} message - The user's message
+ * Store the last joke ID for a specific chat
  * @param {string} chatId - The chat ID
- * @returns {boolean} - Whether feedback was processed
+ * @param {string} jokeId - The joke ID
  */
-async function processFeedback(message, chatId) {
-  // Get the run ID for this chat
-  const runId = getRunId(chatId);
-  if (!runId) {
-    console.log(`No run ID found for chat ${chatId}, cannot process feedback`);
-    return false;
+function storeJokeIdForChat(chatId, jokeId) {
+  chatLastJokeIdMap.set(chatId, jokeId);
+  console.log(`Stored last joke ID ${jokeId} for chat ${chatId}`);
+}
+
+/**
+ * Get the last joke ID for a specific chat
+ * @param {string} chatId - The chat ID
+ * @returns {string|null} - The joke ID or null if not found
+ */
+function getJokeIdForChat(chatId) {
+  const jokeId = chatLastJokeIdMap.get(chatId) || null;
+  if (jokeId) {
+    console.log(`Retrieved last joke ID ${jokeId} for chat ${chatId}`);
+  } else {
+    console.log(`No last joke ID found for chat ${chatId}`);
+  }
+  return jokeId;
+}
+
+/**
+ * Process user feedback message and record it in LangSmith.
+ * This function primarily checks if a message looks like feedback for LangSmith logging.
+ * The actual handling of feedback (like calling the MCP tool) should be done by the agent based on history and system prompt.
+ * @param {string} message - The user's message.
+ * @param {string} chatId - The chat ID.
+ * @returns {Promise<{isFeedback: boolean, feedbackType: string|null}>} - Object indicating if feedback was detected and its type.
+ */
+async function processFeedback(message, chatId) { // Removed jokeId and mcpClient params
+  const result = { isFeedback: false, feedbackType: null }; // Removed 'recorded' field
+
+  // Get the LangSmith run ID for this chat for LangSmith feedback
+  const langsmithRunId = getRunId(chatId);
+  if (!langsmithRunId) {
+    console.log(`No LangSmith run ID found for chat ${chatId}, cannot record LangSmith feedback`);
+    // Continue processing for MCP feedback if jokeId is present
   }
 
   // Normalize message to lowercase
@@ -59,46 +93,54 @@ async function processFeedback(message, chatId) {
   ];
   
   // Determine feedback type
-  let feedbackType = null;
+  // let feedbackType = null; // Use result.feedbackType instead
   
   // Check for positive patterns
   for (const pattern of positivePatterns) {
     if (normalizedMessage.includes(pattern)) {
-      feedbackType = 'positive';
+      result.feedbackType = 'positive';
       break;
     }
   }
-  
+
   // If not positive, check for negative patterns
-  if (!feedbackType) {
+  if (!result.feedbackType) {
     for (const pattern of negativePatterns) {
       if (normalizedMessage.includes(pattern)) {
-        feedbackType = 'negative';
+        result.feedbackType = 'negative';
         break;
       }
     }
   }
-  
-  // If we determined a feedback type, record it
-  if (feedbackType) {
-    console.log(`Detected ${feedbackType} feedback in message: "${message}"`);
-    
-    try {
-      await recordFeedback(runId, feedbackType, chatId, message);
-      console.log(`Successfully recorded ${feedbackType} feedback for run ${runId}`);
-      return true;
-    } catch (error) {
-      console.error(`Error recording feedback: ${error.message}`);
-      return false;
+
+  // If we determined a feedback type
+  if (result.feedbackType) {
+    result.isFeedback = true;
+    console.log(`Detected ${result.feedbackType} feedback in message: "${message}" for chat ${chatId}`);
+
+    // Record feedback in LangSmith (if run ID is available)
+    if (langsmithRunId) {
+      try {
+        // Use the original LangSmith feedback function
+        await recordLangSmithFeedback(langsmithRunId, result.feedbackType, chatId, message);
+        console.log(`Successfully recorded ${result.feedbackType} feedback for LangSmith run ${langsmithRunId}`);
+      } catch (error) {
+        console.error(`Error recording LangSmith feedback: ${error.message}`);
+      }
+    } else {
+       console.log(`No LangSmith run ID found for chat ${chatId}, skipping LangSmith feedback recording.`);
     }
+  } else {
+    console.log(`No feedback detected in message: "${message}" for chat ${chatId}`);
   }
-  
-  // No feedback detected
-  return false;
+
+  return result;
 }
 
 module.exports = {
   storeRunId,
   getRunId,
+  storeJokeIdForChat, // Export new function
+  getJokeIdForChat,   // Export new function
   processFeedback
 };

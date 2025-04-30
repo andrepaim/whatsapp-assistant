@@ -5,12 +5,13 @@ const { ChatOpenAI } = require('@langchain/openai');
 const path = require('path'); // Keep path for system prompt require
 const { HumanMessage, AIMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const { Client : MCPClient } = require('@modelcontextprotocol/sdk/client/index.js');
-const { SSEClientTransport } = require('@modelcontextprotocol/sdk/client/sse.js');
 const { loadChatHistory, saveChatHistory } = require('./history.js'); // Import history functions
 const { createReactAgent }  = require("@langchain/langgraph/prebuilt");
+const { ToolMessage: LangGraphToolMessage } = require("@langchain/core/messages"); // Use a different alias to avoid conflict
 const { MultiServerMCPClient } = require('@langchain/mcp-adapters');
 const { initLangSmith, withTracing } = require('./langsmith-integration.js');
-const { storeRunId, processFeedback } = require('./feedback-handler.js');
+// Import joke ID functions and ensure processFeedback is imported correctly
+const { storeRunId, processFeedback, getJokeIdForChat, storeJokeIdForChat } = require('./feedback-handler.js');
 
 
 // Load environment variables
@@ -21,15 +22,18 @@ initLangSmith();
 
 // LLM configuration (with defaults)
 const LLM_CONFIG = {
-  provider: process.env.LLM_PROVIDER || 'openrouter',
-  model: process.env.LLM_MODEL || 'openai/gpt4.1-nano',
-  api_base: process.env.LLM_API_BASE || 'https://openrouter.ai/api/v1',
+  provider: process.env.LLM_PROVIDER,
+  model: process.env.LLM_MODEL,
+  api_base: process.env.LLM_API_BASE,
   api_key: process.env.LLM_API_KEY || '',
   system_prompt: require('./system-prompt.js'),
-  mcp_server_url: process.env.MCP_SERVER_URL || ''
+  mcp_server_url: process.env.MCP_SERVER_URL
 };
 
 // Chat history storage and functions are now in history.js
+
+// Map to store the last joke ID for each chat - Managed in feedback-handler.js now
+// const chatLastJokeIdMap = new Map(); // Removed as it's handled in feedback-handler
 
 // Initialize MCP client and tools
 let mcpClient = null;
@@ -91,8 +95,41 @@ async function initMCPClient() {
 initMCPClient();
 
 // Function to get response from LLM using LangChain
+// Function to extract joke_id from ToolMessage content
+function extractJokeIdFromToolMessage(toolMessage) {
+  // Ensure toolMessage and content exist
+  if (!toolMessage || !toolMessage.content) {
+     console.log("Skipping joke ID extraction: ToolMessage or content is missing.");
+     return null;
+  }
+  // Check the name if available (might be in additional_kwargs or a direct property depending on LangChain version)
+  const toolName = toolMessage.name || toolMessage.additional_kwargs?.name;
+  if (toolName !== 'mcp__joke__get_joke') {
+     console.log(`Skipping joke ID extraction: Tool name is '${toolName}', not 'mcp__joke__get_joke'.`);
+     return null;
+  }
+
+  try {
+    // Assuming content is a JSON string
+    const content = JSON.parse(toolMessage.content);
+    if (content && content.joke_id) {
+       console.log(`Extracted joke_id ${content.joke_id} from ToolMessage content.`);
+       return content.joke_id;
+    } else {
+       console.warn("Parsed ToolMessage content does not contain joke_id:", content);
+       return null;
+    }
+  } catch (e) {
+    console.error("Error parsing ToolMessage content JSON:", e, "Content:", toolMessage.content);
+    // If content is not JSON, maybe the joke_id is directly in the string? Less likely.
+    return null;
+  }
+}
+
+
 // Define the base function that will be wrapped with tracing
 async function _getResponseFromLLM(message, chatId) {
+  let chatHistory = []; // Define chatHistory in the outer scope
   try {
     console.log(`LLM REQUEST - Chat ID: ${chatId}, Message: "${message}"`);
     
@@ -137,9 +174,9 @@ async function _getResponseFromLLM(message, chatId) {
     // Initialize the chat model
     console.log('Initializing ChatOpenAI model');
 
-    // Load chat history for this chat
+    // Load chat history for this chat (now async)
     console.log(`Loading chat history for ${chatId}`);
-    const chatHistory = loadChatHistory(chatId);
+    chatHistory = await loadChatHistory(chatId); // Assign to the outer scope variable - ADD AWAIT
     console.log(`Chat history loaded: ${chatHistory.length} messages`);
     
     // Always include the system message at the beginning if not already there
@@ -168,62 +205,126 @@ async function _getResponseFromLLM(message, chatId) {
         llm: model, 
         tools: mcpTools,
       });
+
+      console.log('Invoking agent with history for chat:', chatId); // Simplified log
       response = await chatModel.invoke({
         messages: limitedHistory,
       });
-      
-      // Extract the final content from the response array
+      // --- DEBUGGING: Log the raw response structure ---
+      console.log('--- Agent Raw Response START ---');
+      console.log(JSON.stringify(response, null, 2));
+      console.log('--- Agent Raw Response END ---');
+      // --- END DEBUGGING ---
+
+      // Extract the final content and potentially the joke_id from the response messages
       let finalContent = '';
+      let jokeId = null;
+      let finalAiMessage = null; // Store the actual AIMessage object
+
       if (response.messages && Array.isArray(response.messages)) {
-        // Find the last AIMessage in the array
-        for (let i = response.messages.length - 1; i >= 0; i--) {
-          const message = response.messages[i];
-          if (message._getType && message._getType() === 'ai') {
-            finalContent = message.content;
-            console.log('Found AI message content:', finalContent);
-            break;
-          }
+        console.log(`Processing ${response.messages.length} messages from agent response...`);
+        // Iterate through messages to find joke_id from ToolMessage and the final AIMessage
+        for (const msg of response.messages) {
+           const msgType = msg._getType ? msg._getType() : 'unknown';
+           console.log(`  Processing message of type: ${msgType}`);
+
+           // Check if it's a ToolMessage
+           if (msgType === 'tool') {
+             // Pass the whole message object to the extraction function
+             const extractedId = extractJokeIdFromToolMessage(msg);
+             if (extractedId) {
+               jokeId = extractedId;
+               // Log already happens inside extractJokeIdFromToolMessage
+             }
+           }
+           // Check if it's the final AI message (usually the last one)
+           if (msgType === 'ai') {
+             finalContent = msg.content || '';
+             finalAiMessage = msg; // Store the full AI message object
+             console.log('  Found potential AI message content:', finalContent.substring(0, 100) + '...');
+           }
         }
-        
-        // If no AIMessage was found, try to extract content from the last element
-        if (!finalContent && response.messages.length > 0) {
-          const lastElement = response.messages[response.messages.length - 1];
-          finalContent = lastElement.content || lastElement.output || '';
-          console.log('Using last element content:', finalContent);
+
+        // Ensure we have the *last* AI message as the final response
+        const lastMessage = response.messages[response.messages.length - 1];
+        if (lastMessage?._getType && lastMessage._getType() === 'ai') {
+            finalContent = lastMessage.content || '';
+            finalAiMessage = lastMessage;
+            console.log('Confirmed last message is AI. Content:', finalContent.substring(0, 100) + '...');
+        } else if (!finalAiMessage && lastMessage) {
+            // Fallback if the last message wasn't AI but we didn't find one earlier
+            finalContent = lastMessage.content || lastMessage.output || '';
+            console.log('Using last element content (non-AI fallback):', finalContent.substring(0, 100) + '...');
+            if (finalContent) {
+               finalAiMessage = new AIMessage(finalContent); // Create a basic AIMessage
+            }
         }
+
       } else if (response && response.content) {
-        // Handle case where response is a single message
+        // Handle case where response is a single message object (less likely with createReactAgent)
         finalContent = response.content;
-        console.log('Using single message content:', finalContent);
+        finalAiMessage = new AIMessage(finalContent);
+        console.log('Using single message content:', finalContent.substring(0, 100) + '...');
+      } else {
+         console.warn("Agent response structure not recognized or messages array is missing/empty:", response);
       }
 
-      // Add the AI response to chat history
-          if (finalContent) {
-            const aiMessage = new AIMessage(finalContent);
-            chatHistory.push(aiMessage);
-          }
-          console.log(`Saving updated chat history for ${chatId}`);
-          await saveChatHistory(chatId, chatHistory);
-          return finalContent;
+
+      // Store the joke_id if found during message iteration
+      if (jokeId) {
+        storeJokeIdForChat(chatId, jokeId); // Function from feedback-handler.js
+      } else {
+        console.log("No joke_id extracted from the agent's response messages.");
+      }
+
+      // Add only the *final* AI response to the chat history we save
+      // Make sure chatHistory is the array loaded at the start + the user message
+      if (finalAiMessage) {
+        // Ensure we don't add duplicates if history already contains it (though unlikely here)
+        if (chatHistory[chatHistory.length - 1] !== finalAiMessage) {
+           chatHistory.push(finalAiMessage);
+           console.log("Added final AI message to chat history.");
+        }
+      } else {
+         console.warn("No final AI message object found to add to history.");
+      }
+
+      console.log(`Saving updated chat history for ${chatId} (length: ${chatHistory.length})`);
+      await saveChatHistory(chatId, chatHistory); // Save history including the final AI message
+      return finalContent; // Return only the text content for WhatsApp reply
     } else {
       console.log('No MCP tools available, using standard LLM');
       // Use the model directly without tools
+      console.log('Invoking standard LLM (no tools)');
       chatModel = model;
       response = await chatModel.invoke(limitedHistory);
       const finalContent = response?.content ?? ''; // Default to empty string if content is null/undefined
-      chatHistory.push(new AIMessage(finalContent)); // Add the LLM response to chat history
-      console.log(`Saving updated chat history for ${chatId}`);
-      // Pass the potentially modified chatHistory (with tool calls/results)
-      await saveChatHistory(chatId, chatHistory); 
+      // Ensure chatHistory is defined before pushing
+      if (chatHistory) {
+         chatHistory.push(new AIMessage(finalContent)); // Add the LLM response to chat history
+         console.log(`Saving updated chat history for ${chatId}`);
+         await saveChatHistory(chatId, chatHistory);
+      } else {
+         console.error("chatHistory is undefined in standard LLM path!");
+      }
       return finalContent; // Return the final content
     }
-    } catch (error) {
+  } catch (error) {
       // Log errors related to the LLM API call itself or the overall process
-      console.error(`Error calling ${LLM_CONFIG.provider} API:`, error.message);
+      console.error(`Error in _getResponseFromLLM for chat ${chatId}:`, error.message);
       console.error('Error stack:', error.stack);
-      await saveChatHistory(chatId, chatHistory);
-      // Save conversation history despite the error
-      try { await saveChatHistory(chatId, chatHistory); } catch (e) { console.error('Error saving history after failure:', e); }
+      // Save conversation history despite the error, if chatHistory is populated
+      if (chatHistory && chatHistory.length > 0) {
+        try {
+          console.log(`Attempting to save history for ${chatId} after error...`);
+          await saveChatHistory(chatId, chatHistory);
+          console.log(`History saved successfully for ${chatId} after error.`);
+        } catch (e) {
+          console.error(`CRITICAL: Error saving history for ${chatId} after primary error:`, e);
+        }
+      } else {
+         console.log(`No chat history to save for ${chatId} after error.`);
+      }
     
     if (error.response) {
       console.error('API Error details:', error.response.data);
@@ -332,12 +433,17 @@ client.on('message', async (message) => {
     console.log(`Using chat ID for history: ${chatId}`);
     
     // Check if this message is feedback to a previous joke
-    // This is important for LangSmith traceability
-    const isFeedback = await processFeedback(message.body, chatId);
-    if (isFeedback) {
-      console.log(`Processed feedback for chat ${chatId}`);
-      // For feedback messages, we still want to respond, so we continue processing
+    // Pass the necessary info (jokeId) to processFeedback
+    const jokeId = getJokeIdForChat(chatId); // Retrieve the last joke ID for this chat
+    // Check if this message is feedback ONLY for LangSmith logging purposes
+    // The actual feedback handling (calling MCP tool) is done by the agent
+    const feedbackResult = await processFeedback(message.body, chatId); // No longer passes jokeId or mcpClient
+    if (feedbackResult.isFeedback) {
+      console.log(`LangSmith feedback detected for chat ${chatId}. Type: ${feedbackResult.feedbackType}. Letting agent handle response.`);
+    } else {
+      console.log(`No LangSmith feedback detected for chat ${chatId}. Proceeding normally.`);
     }
+    // --- Always proceed to the agent regardless of feedback detection ---
     
     // Get response from LLM with chat history context
     console.log(`Requesting LLM response for message: "${message.body}"`);
@@ -379,6 +485,9 @@ if (typeof module !== 'undefined' && module.exports) {
     getResponseFromLLM,
     loadChatHistory,
     saveChatHistory,
-    initMCPClient
+    initMCPClient,
+    // Expose map accessors if needed elsewhere, though handled via feedback-handler now
+    // getJokeIdForChat: (chatId) => chatLastJokeIdMap.get(chatId), // Managed in feedback-handler
+    // storeJokeIdForChat: (chatId, jokeId) => chatLastJokeIdMap.set(chatId, jokeId) // Managed in feedback-handler
   };
 }

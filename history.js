@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { HumanMessage, AIMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
+const { load } = require("@langchain/core/load"); // Import the load function
 
 const dataDir = path.join(__dirname, 'data');
 const historyLimit = parseInt(process.env.CHAT_HISTORY_LIMIT || '20'); // Default to 20 messages
@@ -10,59 +11,61 @@ const historyLimit = parseInt(process.env.CHAT_HISTORY_LIMIT || '20'); // Defaul
 /**
  * Serializes a LangChain message object into a plain JSON object.
  * @param {BaseMessage} message - The LangChain message object.
- * @returns {object} A plain JSON object representing the message.
+ * @returns {object | null} A plain JSON object suitable for LangChain's load function, or null if serialization fails.
  */
 function serializeMessage(message) {
-  // Handle LangChain message objects or plain objects in tests
-  if (message && typeof message.toJSON === 'function') {
-    const messageJson = message.toJSON();
-    return {
-      type: message._getType(),
-      ...messageJson,
-    };
-  } else {
-    // Plain object with type and content or serialized form
-    return message;
+  // Use LangChain's built-in serialization logic if possible
+  // The standard toJSON() often produces the required structure {"lc": 1, "type": "constructor", "id": [...], "kwargs": {...}}
+  try {
+    if (message && typeof message.toJSON === 'function') {
+      const serialized = message.toJSON();
+      // Add basic validation if needed, e.g., check for lc, type, id, kwargs
+      if (serialized && serialized.lc === 1 && serialized.type === 'constructor' && Array.isArray(serialized.id) && serialized.kwargs) {
+        // console.log(`Serialized message: ${JSON.stringify(serialized)}`); // Optional log
+        return serialized;
+      } else {
+        console.error('Serialization Error: message.toJSON() did not produce expected structure:', serialized, 'Original message:', message);
+        return null;
+      }
+    } else {
+      console.warn('Serialization Warning: Attempting to serialize non-LangChain message object:', message);
+      return null;
+    }
+  } catch (error) {
+    console.error('Serialization Exception:', error, 'Original message:', message);
+    return null;
   }
 }
 
 /**
  * Deserializes a plain JSON object back into a LangChain message object.
  * @param {object} messageData - The plain JSON object representing the message.
- * @returns {BaseMessage | null} The deserialized LangChain message object, or null if type is unknown.
+ * @returns {Promise<BaseMessage | null>} A promise resolving to the deserialized LangChain message object, or null if deserialization fails.
  */
-function deserializeMessage(messageData) {
-  const { type, kwargs } = messageData;
-  const content = kwargs?.content; // Common content field
-  const additional_kwargs = kwargs?.additional_kwargs; // Common additional_kwargs field
-
-  switch (type) {
-    case 'human':
-      return new HumanMessage({ content: content, additional_kwargs: additional_kwargs });
-    case 'ai':
-      // Handle potential tool calls stored in additional_kwargs
-      return new AIMessage({ content: content, additional_kwargs: additional_kwargs });
-    case 'system':
-      return new SystemMessage({ content: content, additional_kwargs: additional_kwargs });
-    case 'tool':
-      // ToolMessage needs tool_call_id
-      return new ToolMessage({
-        content: content,
-        tool_call_id: kwargs?.tool_call_id,
-        additional_kwargs: additional_kwargs
-      });
-    default:
-      console.warn(`Unknown message type during deserialization: ${type}`);
-      return null; // Or handle unknown types as needed
+async function deserializeMessage(messageData) {
+  // Use LangChain's load function for robust deserialization
+  try {
+    // The `load` function expects the serialized format (e.g., from toJSON)
+    const message = await load(JSON.stringify(messageData)); // `load` expects a string
+    // Basic check if it's a message type we expect
+    if (message && typeof message._getType === 'function') {
+      return message;
+    } else {
+      console.error('Deserialization Error: `load` did not return a valid message object:', message, 'Data:', messageData);
+      return null;
+    }
+  } catch (error) {
+    console.error('Deserialization Exception using `load`:', error, 'Data:', messageData);
+    return null;
   }
 }
 
 /**
  * Loads chat history for a given chat ID from a JSON file.
  * @param {string} chatId - The unique identifier for the chat.
- * @returns {Array<BaseMessage>} An array of LangChain message objects.
+ * @returns {Promise<Array<BaseMessage>>} A promise resolving to an array of LangChain message objects.
  */
-function loadChatHistory(chatId) {
+async function loadChatHistory(chatId) { // Make the function async
   const filePath = path.join(dataDir, `${chatId}.json`);
   console.log(`Attempting to load history from: ${filePath}`);
 
@@ -70,10 +73,21 @@ function loadChatHistory(chatId) {
     try {
       const fileContent = fs.readFileSync(filePath, 'utf-8');
       const historyData = JSON.parse(fileContent);
-      console.log(`Successfully read history file for ${chatId}. Found ${historyData.length} messages.`);
+      console.log(`Successfully read history file for ${chatId}. Found ${historyData.length} raw message objects.`);
 
-      // Deserialize messages, filtering out any null results from unknown types
-      const deserializedHistory = historyData.map(deserializeMessage).filter(msg => msg !== null);
+      // Deserialize messages asynchronously using the new deserializeMessage function
+      const deserializationPromises = historyData.map((msgData, index) => {
+        // console.log(`Deserializing message ${index}:`, JSON.stringify(msgData)); // Optional: Log raw data
+        return deserializeMessage(msgData); // This now returns a Promise
+      });
+
+      // Wait for all promises to resolve
+      const resolvedMessages = await Promise.all(deserializationPromises);
+
+      // Filter out any null results from failed deserialization
+      const deserializedHistory = resolvedMessages.filter(msg => msg !== null);
+
+      console.log(`Successfully deserialized ${deserializedHistory.length} messages for ${chatId}.`);
 
       // Return last N messages based on historyLimit
       const limitedHistory = deserializedHistory.slice(-historyLimit);
@@ -104,9 +118,16 @@ function saveChatHistory(chatId, chatHistory) {
   }
   console.log(`Attempting to save history to: ${filePath}`);
   try {
-    console.log(`Saving ${chatHistory.length} messages for ${chatId}`);
-    const allData = chatHistory.map(serializeMessage);
+    console.log(`Attempting to serialize ${chatHistory.length} messages for ${chatId}`);
+    // Serialize messages, filtering out any null results from failed serialization
+    const allData = chatHistory.map(serializeMessage).filter(data => data !== null);
+
+    console.log(`Successfully serialized ${allData.length} messages for ${chatId}.`);
+
+    // Limit history before saving
     const limitedData = allData.slice(-historyLimit);
+    console.log(`Saving ${limitedData.length} messages (limited to ${historyLimit}) for ${chatId}`);
+
     const jsonContent = JSON.stringify(limitedData, null, 2);
     fs.writeFileSync(filePath, jsonContent, 'utf-8');
     console.log(`Successfully saved history file for ${chatId}.`);
